@@ -5,9 +5,24 @@ use ringbuf::traits::{Consumer, Observer};
 
 use crate::RingCons;
 
-pub fn main(mut cons: RingCons, buffer_samples: usize) -> Result<(), Box<dyn std::error::Error>> {
+pub fn main(
+    mut cons: RingCons,
+    buffer_samples: usize,
+    device_name: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let host = cpal::default_host();
-    let device = host.default_output_device().unwrap();
+    let device = if let Some(name) = device_name {
+        host.output_devices()
+            .unwrap()
+            .find(|dev| {
+                let dev = dev.name();
+                log::info!("trying device {dev:?}");
+                matches!(dev, Ok(dev) if dev == name)
+            })
+            .expect("device not found")
+    } else {
+        host.default_output_device().unwrap()
+    };
     let mut supported_configs_range = device.supported_output_configs().unwrap();
     let supported_config = supported_configs_range
         .find(|cfg| {

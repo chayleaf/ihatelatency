@@ -39,6 +39,8 @@ enum Cmd {
         /// Amount of samples to buffer
         #[arg(short = 's', long)]
         buffer_samples: Option<u8>,
+        #[arg(short, long)]
+        device_name: Option<String>,
     },
     Record {
         #[arg(short, long)]
@@ -276,12 +278,15 @@ fn main() {
                 });
                 record::main(node_name, prod)
             }
-            Cmd::Play { buffer_samples } => {
+            Cmd::Play {
+                buffer_samples,
+                device_name,
+            } => {
                 std::thread::spawn(move || {
                     args.net
                         .work_prod(&mut prod, args.inactivity_sec.unwrap_or(2))
                 });
-                play::main(cons, buffer_samples.unwrap_or(0).into())
+                play::main(cons, buffer_samples.unwrap_or(0).into(), device_name)
             }
         };
         match res {
