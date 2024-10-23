@@ -52,4 +52,5 @@ parec --format=s16le -d <sink_name> --latency-msec=1 --rate=48000 | nc <server_a
 
 Nonetheless, I guarantee that my program is at least as good as other
 programs in terms of latency, the only other thing you can tune is
-network settings.
+network settings, or sound server settings ([here's a post explaining how
+to do it for PulseAudio](https://juho.tykkala.fi/Pulseaudio-and-latency))
