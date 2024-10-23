@@ -1,0 +1,13 @@
+[package]
+name = "ihatelatency"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.20", features = ["derive"] }
+cpal = "0.15.3"
+env_logger = { version = "0.11.5", default-features = false, features = ["auto-color"] }
+log = "0.4.22"
+pipewire = "0.8.0"
+ringbuf = "0.4.7"
+ringbuf-blocking = "0.1.0-rc.3"
