@@ -16,11 +16,13 @@ ihatelatency -l -a <listen_address> record -n remote
 ihatelatency -a <server_address> play
 ```
 
-Optionally, the `-u` flag may be added to use UDP instead of TCP. The
-`-s` flag for the `play` command allows you to buffer more samples,
-reducing audio gaps in case of inconsistent network speed. Also, roles
-can be switched, the recording device is allowed to be the one to
-connect to the playing server.
+Roles can be switched, the recording device is allowed to be the one to
+connect to the playing server. Optionally, the `-u` flag may be added to
+use UDP instead of TCP. Note that for UDP the playback device must be
+the server.
+
+The `-s` flag for the `play` command allows you to buffer more samples,
+reducing audio gaps in case of inconsistent network speed.
 
 Currently, `s16le`, `48000`, stereo is assumed, but it should be fairly
 trivial to add support to sample rate selection (or sending it on
