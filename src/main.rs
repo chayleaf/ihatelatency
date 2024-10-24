@@ -49,8 +49,8 @@ enum Cmd {
 }
 
 trait ProdCons {
-    fn work_prod(&mut self, prod: &mut RingProd, inactivity_sec: u32);
-    fn work_cons(&mut self, cons: &mut RingCons, inactivity_sec: u32);
+    fn produce(&mut self, prod: &mut RingProd, inactivity_sec: u32);
+    fn consume(&mut self, cons: &mut RingCons, inactivity_sec: u32);
 }
 
 #[derive(Args, Copy, Clone, Debug)]
@@ -112,63 +112,63 @@ impl Endpoint {
 }
 
 impl ProdCons for Endpoint {
-    fn work_cons(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
+    fn consume(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
         loop {
             if self.udp {
                 let Some(mut sock) = self.bind_udp() else {
                     continue;
                 };
-                sock.work_cons(cons, inactivity_sec);
+                sock.consume(cons, inactivity_sec);
             } else if self.listen {
                 let Some(mut listener) = self.bind() else {
                     continue;
                 };
-                listener.work_cons(cons, inactivity_sec);
+                listener.consume(cons, inactivity_sec);
             } else {
                 let Some(mut conn) = self.connect() else {
                     continue;
                 };
-                conn.work_cons(cons, inactivity_sec);
+                conn.consume(cons, inactivity_sec);
             }
         }
     }
-    fn work_prod(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
+    fn produce(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
         loop {
             if self.udp {
                 let Some(mut sock) = self.bind_udp() else {
                     continue;
                 };
-                sock.work_prod(prod, inactivity_sec);
+                sock.produce(prod, inactivity_sec);
             } else if self.listen {
                 let Some(mut listener) = self.bind() else {
                     continue;
                 };
-                listener.work_prod(prod, inactivity_sec);
+                listener.produce(prod, inactivity_sec);
             } else {
                 let Some(mut conn) = self.connect() else {
                     continue;
                 };
-                conn.work_prod(prod, inactivity_sec);
+                conn.produce(prod, inactivity_sec);
             }
         }
     }
 }
 
 impl ProdCons for TcpListener {
-    fn work_prod(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
+    fn produce(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
         while let Ok((mut conn, _addr)) = self.accept() {
-            conn.work_prod(prod, inactivity_sec);
+            conn.produce(prod, inactivity_sec);
         }
     }
-    fn work_cons(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
+    fn consume(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
         while let Ok((mut conn, _addr)) = self.accept() {
-            conn.work_cons(cons, inactivity_sec);
+            conn.consume(cons, inactivity_sec);
         }
     }
 }
 
 impl ProdCons for TcpStream {
-    fn work_cons(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
+    fn consume(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
         let _ = self.set_read_timeout(Some(Duration::from_secs(inactivity_sec.into())));
         let mut buf = [0u8; 65536];
         loop {
@@ -185,7 +185,7 @@ impl ProdCons for TcpStream {
             }
         }
     }
-    fn work_prod(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
+    fn produce(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
         let _ = self.set_read_timeout(Some(Duration::from_secs(inactivity_sec.into())));
         let mut buf = [0u8; 65536];
         while let Ok(len) = self.read(&mut buf) {
@@ -207,7 +207,7 @@ impl ProdCons for TcpStream {
 }
 
 impl ProdCons for UdpSocket {
-    fn work_cons(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
+    fn consume(&mut self, cons: &mut RingCons, inactivity_sec: u32) {
         let mut buf = [0u8; 65536];
         if self
             .set_write_timeout(Some(Duration::from_secs(inactivity_sec.into())))
@@ -233,7 +233,7 @@ impl ProdCons for UdpSocket {
             }
         }
     }
-    fn work_prod(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
+    fn produce(&mut self, prod: &mut RingProd, inactivity_sec: u32) {
         let mut buf = [0u8; 65536];
         let mut connected = false;
         while let Ok(len) = if connected {
@@ -274,7 +274,7 @@ fn main() {
             Cmd::Record { node_name } => {
                 std::thread::spawn(move || {
                     args.net
-                        .work_cons(&mut cons, args.inactivity_sec.unwrap_or(2))
+                        .consume(&mut cons, args.inactivity_sec.unwrap_or(2))
                 });
                 record::main(node_name, prod)
             }
@@ -284,7 +284,7 @@ fn main() {
             } => {
                 std::thread::spawn(move || {
                     args.net
-                        .work_prod(&mut prod, args.inactivity_sec.unwrap_or(2))
+                        .produce(&mut prod, args.inactivity_sec.unwrap_or(2))
                 });
                 play::main(cons, buffer_samples.unwrap_or(0).into(), device_name)
             }
