@@ -36,9 +36,9 @@ struct Cli {
 #[derive(Clone, Debug, Subcommand)]
 enum Cmd {
     Play {
-        /// Amount of samples to buffer
+        /// Amount of samples to buffer (disables automatic buffer adjustment)
         #[arg(short = 's', long)]
-        buffer_samples: Option<u8>,
+        buffer_samples: Option<usize>,
         #[arg(short, long)]
         device_name: Option<String>,
     },
@@ -286,7 +286,7 @@ fn main() {
                     args.net
                         .produce(&mut prod, args.inactivity_sec.unwrap_or(2))
                 });
-                play::main(cons, buffer_samples.unwrap_or(0).into(), device_name)
+                play::main(cons, buffer_samples.map(|x| x * 2), device_name)
             }
         };
         match res {

@@ -21,8 +21,13 @@ connect to the playing server. Optionally, the `-u` flag may be added to
 use UDP instead of TCP. Note that for UDP the playback device must be
 the server.
 
-The `-s` flag for the `play` command allows you to buffer more samples,
-reducing audio gaps in case of inconsistent network speed.
+By default, the playback buffersize is autoadjusted based on how stable
+the network is. This is pretty conservative, the buffer is adjusted so
+there are barely any xruns. The `-s` flag for the `play` command allows
+you to choose the buffer size yourself, picking the right balance
+between latency and xruns. If you set the env var `RUST_LOG=debug`, the
+program will print a log message whenever an xrun occurs, helping you
+decide on the perfect buffer size.
 
 Currently, `s16le`, `48000`, stereo is assumed, but it should be fairly
 trivial to add support to sample rate selection (or sending it on

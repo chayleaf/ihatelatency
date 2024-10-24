@@ -7,7 +7,7 @@ use crate::RingCons;
 
 pub fn main(
     mut cons: RingCons,
-    buffer_samples: usize,
+    buffer_bytes: Option<usize>,
     device_name: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let host = cpal::default_host();
@@ -36,10 +36,16 @@ pub fn main(
         .with_sample_rate(cpal::SampleRate(48000));
     let config = supported_config.into();
     cons.set_timeout(Some(Duration::from_millis(10)));
+    let mut auto_buffer_size = 0.0f64;
+    let mut last_rx = None;
     let stream = device.build_output_stream(
         &config,
-        move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+        move |data: &mut [i16], info: &cpal::OutputCallbackInfo| {
             data.fill(0);
+            // type annotation
+            if false {
+                last_rx = Some(info.timestamp().callback);
+            }
             match cons.wait_occupied(1) {
                 Ok(()) => {}
                 Err(err) => match err {
@@ -47,18 +53,52 @@ pub fn main(
                         log::error!("ringbuf closed");
                         std::process::exit(1);
                     }
-                    ringbuf_blocking::WaitError::TimedOut => return,
+                    ringbuf_blocking::WaitError::TimedOut => {
+                        // if it's been over a second, reset buffer size
+                        if let Some(diff) = last_rx
+                            .and_then(|last_rx| info.timestamp().callback.duration_since(&last_rx))
+                        {
+                            if diff > Duration::from_secs(1) {
+                                auto_buffer_size = 0.0;
+                            }
+                        }
+                        return;
+                    }
                 },
             }
-            let mut len = cons.occupied_len();
-            while len > 0 {
-                len = len.saturating_sub(cons.pop_slice(unsafe {
-                    std::slice::from_raw_parts_mut(data.as_mut_ptr().cast(), data.len() * 2)
-                }));
-                if len < data.len() + buffer_samples * std::mem::size_of::<i16>() {
-                    break;
+            last_rx = Some(info.timestamp().callback);
+            cons.skip(
+                cons.occupied_len()
+                    .saturating_sub(data.len() * 2)
+                    .saturating_sub(
+                        buffer_bytes.unwrap_or_else(|| auto_buffer_size.ceil() as usize * 2),
+                    ),
+            );
+            if buffer_bytes.is_none() {
+                if cons.occupied_len() < data.len() * 2 {
+                    if auto_buffer_size == 0.0 {
+                        auto_buffer_size += 0.1;
+                    } else {
+                        let old_buf_size = auto_buffer_size as usize;
+                        auto_buffer_size = (auto_buffer_size
+                            + (data.len() / 10 - cons.occupied_len() / 20) as f64)
+                            .min(100000.0);
+                        log::debug!(
+                            "xrun ({} samples, buffer size {}, changing buffer size to {})",
+                            data.len() - cons.occupied_len() / 2,
+                            old_buf_size,
+                            auto_buffer_size as usize
+                        );
+                    }
+                } else {
+                    auto_buffer_size = (auto_buffer_size - 0.01).max(0.0);
                 }
+            } else if cons.occupied_len() < data.len() * 2 {
+                log::debug!("xrun ({} samples)", data.len() - cons.occupied_len() / 2);
             }
+            cons.pop_slice(unsafe {
+                std::slice::from_raw_parts_mut(data.as_mut_ptr().cast(), data.len() * 2)
+            });
         },
         move |err| {
             log::error!("cpal: {err}");
