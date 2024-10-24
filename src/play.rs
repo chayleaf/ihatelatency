@@ -54,14 +54,8 @@ pub fn main(
                         std::process::exit(1);
                     }
                     ringbuf_blocking::WaitError::TimedOut => {
-                        // if it's been over a second, reset buffer size
-                        if let Some(diff) = last_rx
-                            .and_then(|last_rx| info.timestamp().callback.duration_since(&last_rx))
-                        {
-                            if diff > Duration::from_secs(1) {
-                                auto_buffer_size = 0.0;
-                            }
-                        }
+                        // consider a timeout to have no xruns
+                        auto_buffer_size = (auto_buffer_size - 0.01).max(0.0);
                         return;
                     }
                 },
