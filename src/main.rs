@@ -286,7 +286,18 @@ fn main() {
                     args.net
                         .produce(&mut prod, args.inactivity_sec.unwrap_or(2))
                 });
-                play::main(cons, buffer_samples.map(|x| x * 2), device_name)
+                play::main(
+                    cons,
+                    {
+                        let buf = buffer_samples.map(|x| x * 2);
+                        if args.net.udp {
+                            Some(buf.unwrap_or(1000000))
+                        } else {
+                            buf
+                        }
+                    },
+                    device_name,
+                )
             }
         };
         match res {

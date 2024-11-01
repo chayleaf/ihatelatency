@@ -36,16 +36,13 @@ pub fn main(
         .with_sample_rate(cpal::SampleRate(48000));
     let config = supported_config.into();
     cons.set_timeout(Some(Duration::from_millis(10)));
-    let mut auto_buffer_size = 0.0f64;
-    let mut last_rx = None;
+    let mut no_xrun_counter = 0;
+    let mut min_buf_size = usize::MAX;
+    let mut to_skip = 0;
     let stream = device.build_output_stream(
         &config,
-        move |data: &mut [i16], info: &cpal::OutputCallbackInfo| {
+        move |data: &mut [i16], _info: &cpal::OutputCallbackInfo| {
             data.fill(0);
-            // type annotation
-            if false {
-                last_rx = Some(info.timestamp().callback);
-            }
             match cons.wait_occupied(1) {
                 Ok(()) => {}
                 Err(err) => match err {
@@ -54,41 +51,30 @@ pub fn main(
                         std::process::exit(1);
                     }
                     ringbuf_blocking::WaitError::TimedOut => {
-                        // consider a timeout to have no xruns
-                        auto_buffer_size = (auto_buffer_size - 0.01).max(0.0);
                         return;
                     }
                 },
             }
-            last_rx = Some(info.timestamp().callback);
-            cons.skip(
-                cons.occupied_len()
-                    .saturating_sub(data.len() * 2)
-                    .saturating_sub(
-                        buffer_bytes.unwrap_or_else(|| auto_buffer_size.ceil() as usize * 2),
-                    ),
-            );
-            if buffer_bytes.is_none() {
-                if cons.occupied_len() < data.len() * 2 {
-                    if auto_buffer_size == 0.0 {
-                        auto_buffer_size += 0.1;
-                    } else {
-                        let old_buf_size = auto_buffer_size as usize;
-                        auto_buffer_size = (auto_buffer_size
-                            + (data.len() / 10 - cons.occupied_len() / 20) as f64)
-                            .min(100000.0);
-                        log::debug!(
-                            "xrun ({} samples, buffer size {}, changing buffer size to {})",
-                            data.len() - cons.occupied_len() / 2,
-                            old_buf_size,
-                            auto_buffer_size as usize
-                        );
-                    }
-                } else {
-                    auto_buffer_size = (auto_buffer_size - 0.01).max(0.0);
-                }
-            } else if cons.occupied_len() < data.len() * 2 {
+            if let Some(buffer_bytes) = buffer_bytes {
+                let extra_bytes = cons.occupied_len().saturating_sub(data.len() * 2);
+                cons.skip(extra_bytes.saturating_sub(buffer_bytes));
+            }
+            if cons.occupied_len() < data.len() * 2 {
                 log::debug!("xrun ({} samples)", data.len() - cons.occupied_len() / 2);
+                min_buf_size = usize::MAX;
+                to_skip = 0;
+                no_xrun_counter = 0;
+            } else if buffer_bytes.is_none() {
+                no_xrun_counter += 1;
+                let buffer_size = (cons.occupied_len() / 2).saturating_sub(data.len());
+                min_buf_size = min_buf_size.min(buffer_size);
+                cons.skip(to_skip * 2);
+                if no_xrun_counter == 100 {
+                    no_xrun_counter = 0;
+                    to_skip = min_buf_size / 500;
+                    min_buf_size = usize::MAX;
+                }
+                log::debug!("buf {buffer_size} ctr {no_xrun_counter}");
             }
             cons.pop_slice(unsafe {
                 std::slice::from_raw_parts_mut(data.as_mut_ptr().cast(), data.len() * 2)

@@ -22,14 +22,13 @@ use UDP instead of TCP. Note that for UDP the playback device must be
 the server.
 
 By default, the playback buffersize is autoadjusted based on how stable
-the network is. This is pretty conservative, the buffer is adjusted so
-there are barely any xruns. The `-s` flag for the `play` command allows
-you to choose the buffer size yourself, picking the right balance
-between latency and xruns. If you set the env var `RUST_LOG=debug`, the
-program will print a log message whenever an xrun occurs, helping you
-decide on the perfect buffer size. Note that buffer autoadjustment can
-work pretty badly with UDP, since a dropped packet is a guaranteed xrun
-no matter the buffer size.
+the network is. The algorithm is pretty stupid, though I plan to improve
+it at some point. If you set the env var `RUST_LOG=debug`, the program
+will print all xruns, and also constantly print the current buffer size.
+This allows you to pick a buffer size by yourself - you can then pass it
+with the `-s` flag for the `play` command. The bigger the buffer, the
+higher the latency and the less xruns. With UDP, autoadjustment is
+disabled (packet loss acts as autoadjustment instead).
 
 Currently, `s16le`, `48000`, stereo is assumed, but it should be fairly
 trivial to add support to sample rate selection (or sending it on
