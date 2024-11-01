@@ -23,7 +23,7 @@ the server.
 
 By default, the playback buffersize is autoadjusted based on how stable
 the network is. The algorithm is pretty stupid, though I plan to improve
-it at some point. If you set the env var `RUST_LOG=debug`, the program
+it at some point. If you set the env var `RUST_LOG=trace`, the program
 will print all xruns, and also constantly print the current buffer size.
 This allows you to pick a buffer size by yourself - you can then pass it
 with the `-s` flag for the `play` command. The bigger the buffer, the

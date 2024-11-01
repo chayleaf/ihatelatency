@@ -39,6 +39,7 @@ pub fn main(
     let mut no_xrun_counter = 0;
     let mut min_buf_size = usize::MAX;
     let mut to_skip = 0;
+    let log_level = log::max_level();
     let stream = device.build_output_stream(
         &config,
         move |data: &mut [i16], _info: &cpal::OutputCallbackInfo| {
@@ -55,26 +56,29 @@ pub fn main(
                     }
                 },
             }
-            if let Some(buffer_bytes) = buffer_bytes {
-                let extra_bytes = cons.occupied_len().saturating_sub(data.len() * 2);
-                cons.skip(extra_bytes.saturating_sub(buffer_bytes));
-            }
             if cons.occupied_len() < data.len() * 2 {
-                log::debug!("xrun ({} samples)", data.len() - cons.occupied_len() / 2);
+                if log_level >= log::Level::Debug {
+                    log::debug!("xrun ({} samples)", data.len() - cons.occupied_len() / 2);
+                }
                 min_buf_size = usize::MAX;
                 to_skip = 0;
                 no_xrun_counter = 0;
-            } else if buffer_bytes.is_none() {
+            } else if let Some(buffer_bytes) = buffer_bytes {
+                let extra_bytes = cons.occupied_len() - data.len() * 2;
+                cons.skip(extra_bytes.saturating_sub(buffer_bytes));
+            } else {
                 no_xrun_counter += 1;
-                let buffer_size = (cons.occupied_len() / 2).saturating_sub(data.len());
+                let buffer_size = cons.occupied_len() / 2 - data.len();
                 min_buf_size = min_buf_size.min(buffer_size);
-                cons.skip(to_skip * 2);
+                cons.skip(to_skip.min(buffer_size) * 2);
                 if no_xrun_counter == 100 {
                     no_xrun_counter = 0;
                     to_skip = min_buf_size / 500;
                     min_buf_size = usize::MAX;
                 }
-                log::debug!("buf {buffer_size} ctr {no_xrun_counter}");
+                if log_level >= log::Level::Trace {
+                    log::trace!("buf {buffer_size} ctr {no_xrun_counter}");
+                }
             }
             cons.pop_slice(unsafe {
                 std::slice::from_raw_parts_mut(data.as_mut_ptr().cast(), data.len() * 2)
